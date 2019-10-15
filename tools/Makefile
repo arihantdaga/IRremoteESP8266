@@ -23,7 +23,7 @@ CPPFLAGS += -DUNIT_TEST -D_IR_LOCALE_=en-AU
 # Flags passed to the C++ compiler.
 CXXFLAGS += -g -Wall -Wextra -pthread -std=gnu++11
 
-all : gc_decode mode2_decode
+all : gc_decode gc_decode_json mode2_decode
 
 run_tests : all
 	failed=""; \
@@ -38,7 +38,7 @@ run_tests : all
 	fi
 
 clean :
-	rm -f  *.o *.pyc gc_decode mode2_decode
+	rm -f  *.o *.pyc gc_decode gc_decode_json mode2_decode
 
 
 # All the IR protocol object files.
@@ -67,6 +67,12 @@ gc_decode.o : gc_decode.cpp $(COMMON_TEST_DEPS) $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c gc_decode.cpp
 
 gc_decode : $(COMMON_OBJ) gc_decode.o
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+gc_decode_json.o : gc_decode_json.cpp $(COMMON_TEST_DEPS) $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c gc_decode_json.cpp
+
+gc_decode_json : $(COMMON_OBJ) gc_decode_json.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 mode2_decode.o : mode2_decode.cpp $(COMMON_TEST_DEPS) $(GTEST_HEADERS)
