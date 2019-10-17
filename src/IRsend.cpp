@@ -489,6 +489,59 @@ void IRsend::sendRaw(uint16_t buf[], uint16_t len, uint16_t hz) {
   }
   ledOff();  // We potentially have ended with a mark(), so turn of the LED.
 }
+// Added By Arihant 
+
+void IRsend::sendRaw(uint16_t num, uint16_t i) {
+  // Set IR carrier frequency
+  if(i & 1){
+    space(num);
+  }else{
+    mark(num);
+  }
+}
+
+void IRsend::sendRaw(uint16_t buf[], uint16_t len, uint16_t first_bit, uint16_t sec_bit, uint16_t rpt_cnt, uint16_t hz)
+{
+  enableIROut(hz);
+  for (uint16_t j=0; j<rpt_cnt;j++){
+    // Serial.println("I am repeated");
+    // Serial.println(j);
+      for (uint16_t i = 0; i < first_bit; i++) {
+          if (i & 1) {
+            space(buf[i]);
+          } 
+          else {
+           // Serial.println(buf[i]);
+           mark(buf[i]);
+          }
+    }
+  }
+  for(int j=0;j<rpt_cnt;j++){
+    // Serial.println("I am repeated");
+    // Serial.println(j);
+     for(int i=first_bit;i<first_bit+sec_bit;i++){
+        if (i & 1) {
+            space(buf[i]);
+          } 
+          else {
+           mark(buf[i]);
+          }
+     } 
+  }
+
+  ledOff(); // Just to be sure
+}
+
+void IRsend::enableirout(uint16_t hz)
+{
+	enableIROut(hz);
+}
+void IRsend::Space()
+{
+	ledOff(); // Just to be sure
+}
+// End - Added By Arihant
+
 #endif  // SEND_RAW
 
 // Get the minimum number of repeats for a given protocol.
@@ -614,6 +667,8 @@ uint16_t IRsend::defaultBits(const decode_type_t protocol) {
       return kMitsubishiACBits;
     case MITSUBISHI136:
       return kMitsubishi136Bits;
+    case MITSUBISHI112:
+      return kMitsubishi112Bits;
     case MITSUBISHI_HEAVY_152:
       return kMitsubishiHeavy152Bits;
     case MITSUBISHI_HEAVY_88:
@@ -947,6 +1002,11 @@ bool IRsend::send(const decode_type_t type, const unsigned char *state,
       sendMitsubishi136(state, nbytes);
       break;
 #endif  // SEND_MITSUBISHI136
+#if SEND_MITSUBISHI112
+    case MITSUBISHI112:
+      sendMitsubishi112(state, nbytes);
+      break;
+#endif  // SEND_MITSUBISHI112
 #if SEND_MITSUBISHIHEAVY
     case MITSUBISHI_HEAVY_88:
       sendMitsubishiHeavy88(state, nbytes);
