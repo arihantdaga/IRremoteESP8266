@@ -2,17 +2,29 @@
 // Copyright 2017-2019 David Conran
 // Copyright 2019 Mark Kuchel
 
-// Mitsubishi
+/// @file
+/// @brief Support for Mitsubishi protocols.
+/// Mitsubishi (TV) decoding added from https://github.com/z3t0/Arduino-IRremote
+/// Mitsubishi (TV) sending & Mitsubishi A/C support added by David Conran
+/// @see GlobalCache's Control Tower's Mitsubishi TV data.
+/// @see https://github.com/marcosamarinho/IRremoteESP8266/blob/master/ir_Mitsubishi.cpp
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/441
+/// @see https://github.com/r45635/HVAC-IR-Control/blob/master/HVAC_ESP8266/HVAC_ESP8266.ino#L84
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/619
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/888
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/947
+/// @see https://github.com/kuchel77
 
 // Supports:
-//   Brand: Mitsubishi,  Model: TV
-//   Brand: Mitsubishi,  Model: HC3000 Projector
+//   Brand: Mitsubishi,  Model: TV (MITSUBISHI)
+//   Brand: Mitsubishi,  Model: HC3000 Projector (MITSUBISHI2)
 //   Brand: Mitsubishi,  Model: MS-GK24VA A/C
 //   Brand: Mitsubishi,  Model: KM14A 0179213 remote
-//   Brand: Mitsubishi Electric,  Model: PEAD-RP71JAA Ducted A/C
-//   Brand: Mitsubishi Electric,  Model: 001CP T7WE10714 remote
-//   Brand: Mitsubishi Electric,  Model: MSH-A24WV / MUH-A24WV A/C
-//   Brand: Mitsubishi Electric,  Model: KPOA remote
+//   Brand: Mitsubishi Electric,  Model: PEAD-RP71JAA Ducted A/C (MITSUBISHI136)
+//   Brand: Mitsubishi Electric,  Model: 001CP T7WE10714 remote (MITSUBISHI136)
+//   Brand: Mitsubishi Electric,  Model: MSH-A24WV A/C (MITSUBISHI112)
+//   Brand: Mitsubishi Electric,  Model: MUH-A24WV A/C (MITSUBISHI112)
+//   Brand: Mitsubishi Electric,  Model: KPOA remote (MITSUBISHI112)
 
 #ifndef IR_MITSUBISHI_H_
 #define IR_MITSUBISHI_H_
@@ -28,8 +40,6 @@
 #include "IRsend_test.h"
 #endif
 
-// Mitsubishi (TV) decoding added from https://github.com/z3t0/Arduino-IRremote
-// Mitsubishi (TV) sending & Mitsubishi A/C support added by David Conran
 
 // Constants
 const uint8_t kMitsubishiAcModeOffset = 3;
@@ -93,46 +103,48 @@ const uint8_t kMitsubishi136FanQuiet = kMitsubishi136FanMin;
 
 // remote_state[5]
 const uint8_t kMitsubishi112PowerByte = 5;
-const uint8_t kMitsubishi112PowerBit =         0b00000100;
+const uint8_t kMitsubishi112PowerOffset = 2;  // 0b00000100
 // remote_state[6]
 const uint8_t kMitsubishi112ModeByte = 6;
-const uint8_t kMitsubishi112ModeMask =         0b00000111;
-const uint8_t kMitsubishi112Cool =                  0b011;
-const uint8_t kMitsubishi112Heat =                  0b001;
-const uint8_t kMitsubishi112Auto =                  0b111;
-const uint8_t kMitsubishi112Dry =                   0b010;
+const uint8_t kMitsubishi112ModeOffset = 0;  // Mask 0b00000111
+const uint8_t kMitsubishi112Cool =                        0b011;
+const uint8_t kMitsubishi112Heat =                        0b001;
+const uint8_t kMitsubishi112Auto =                        0b111;
+const uint8_t kMitsubishi112Dry =                         0b010;
 // remote_state[7]
 const uint8_t kMitsubishi112TempByte = 7;
-const uint8_t kMitsubishi112TempMask =         0b00001111;
+const uint8_t kMitsubishi112TempSize = 4;  // Mask 0b00001111
 const uint8_t kMitsubishi112MinTemp = 16;  // 16C
 const uint8_t kMitsubishi112MaxTemp = 31;  // 31C
 // remote_state[8]
 const uint8_t kMitsubishi112FanByte = 8;
-const uint8_t kMitsubishi112FanMask =          0b11111000;
-const uint8_t kMitsubishi112FanGetMask =            0b111;
-const uint8_t kMitsubishi112FanMin =                0b010;
-const uint8_t kMitsubishi112FanLow =                0b011;
-const uint8_t kMitsubishi112FanMed =                0b101;
-const uint8_t kMitsubishi112FanMax =                0b000;
+const uint8_t kMitsubishi112FanOffset = 0;  // Mask 0b00000111;
+const uint8_t kMitsubishi112FanSize = 3;
+const uint8_t kMitsubishi112FanMin =                     0b010;
+const uint8_t kMitsubishi112FanLow =                     0b011;
+const uint8_t kMitsubishi112FanMed =                     0b101;
+const uint8_t kMitsubishi112FanMax =                     0b000;
 const uint8_t kMitsubishi112FanQuiet = kMitsubishi112FanMin;
 const uint8_t kMitsubishi112SwingVByte = kMitsubishi112FanByte;
-const uint8_t kMitsubishi112SwingVMask =       0b00111000;
-const uint8_t kMitsubishi112SwingVLowest =     0b00101000;
-const uint8_t kMitsubishi112SwingVLow =        0b00100000;
-const uint8_t kMitsubishi112SwingVMiddle =     0b00011000;
-const uint8_t kMitsubishi112SwingVHigh =       0b00010000;
-const uint8_t kMitsubishi112SwingVHighest =    0b00001000;
-const uint8_t kMitsubishi112SwingVAuto =       0b00111000;
+const uint8_t kMitsubishi112SwingVOffset = 3;  // Mask 0b00111000
+const uint8_t kMitsubishi112SwingVSize = 3;    // Mask 0b00111000
+const uint8_t kMitsubishi112SwingVLowest =               0b101;
+const uint8_t kMitsubishi112SwingVLow =                  0b100;
+const uint8_t kMitsubishi112SwingVMiddle =               0b011;
+const uint8_t kMitsubishi112SwingVHigh =                 0b010;
+const uint8_t kMitsubishi112SwingVHighest =              0b001;
+const uint8_t kMitsubishi112SwingVAuto =                 0b111;
 // remote_state[12]
 const uint8_t kMitsubishi112SwingHByte = 12;
-const uint8_t kMitsubishi112SwingHMask =       0b00111100;
-const uint8_t kMitsubishi112SwingHLeftMax =    0b00000100;
-const uint8_t kMitsubishi112SwingHLeft =       0b00001000;
-const uint8_t kMitsubishi112SwingHMiddle =     0b00001100;
-const uint8_t kMitsubishi112SwingHRight =      0b00010000;
-const uint8_t kMitsubishi112SwingHRightMax =   0b00010100;
-const uint8_t kMitsubishi112SwingHWide =       0b00100000;
-const uint8_t kMitsubishi112SwingHAuto =       0b00110000;
+const uint8_t kMitsubishi112SwingHSize = 4;
+const uint8_t kMitsubishi112SwingHOffset = 2;  // Mask 0b00111100
+const uint8_t kMitsubishi112SwingHLeftMax =              0b0001;
+const uint8_t kMitsubishi112SwingHLeft =                 0b0010;
+const uint8_t kMitsubishi112SwingHMiddle =               0b0011;
+const uint8_t kMitsubishi112SwingHRight =                0b0100;
+const uint8_t kMitsubishi112SwingHRightMax =             0b0101;
+const uint8_t kMitsubishi112SwingHWide =                 0b1000;
+const uint8_t kMitsubishi112SwingHAuto =                 0b1100;
 
 // Legacy defines (Deprecated)
 #define MITSUBISHI_AC_VANE_AUTO_MOVE kMitsubishiAcVaneAutoMove
@@ -149,6 +161,10 @@ const uint8_t kMitsubishi112SwingHAuto =       0b00110000;
 #define MITSUBISHI_AC_COOL kMitsubishiAcCool
 #define MITSUBISHI_AC_AUTO kMitsubishiAcAuto
 
+
+/// Class for handling detailed Mitsubishi 144-bit A/C messages.
+/// @note Inspired and derived from the work done at: https://github.com/r45635/HVAC-IR-Control
+/// @warning Consider this very alpha code. Seems to work, but not validated.
 class IRMitsubishiAC {
  public:
   explicit IRMitsubishiAC(const uint16_t pin, const bool inverted = false,
@@ -157,7 +173,11 @@ class IRMitsubishiAC {
   static bool validChecksum(const uint8_t* data);
 #if SEND_MITSUBISHI_AC
   void send(const uint16_t repeat = kMitsubishiACMinRepeat);
-  uint8_t calibrate(void) { return _irsend.calibrate(); }
+  /// Run the calibration to calculate uSec timing offsets for this platform.
+  /// @return The uSec timing offset needed per modulation of the IR Led.
+  /// @note This will produce a 65ms IR signal pulse at 38kHz.
+  ///   Only ever needs to be run once per object instantiation, if at all.
+  int8_t calibrate(void) { return _irsend.calibrate(); }
 #endif  // SEND_MITSUBISHI_AC
   void begin(void);
   void on(void);
@@ -197,25 +217,30 @@ class IRMitsubishiAC {
 #ifndef UNIT_TEST
 
  private:
-  IRsend _irsend;
-#else
-  IRsendTest _irsend;
-#endif
-  uint8_t remote_state[kMitsubishiACStateLength];
+  IRsend _irsend;  ///< Instance of the IR send class
+#else  // UNIT_TEST
+  /// @cond IGNORE
+  IRsendTest _irsend;  ///< Instance of the testing IR send class
+  /// @endcond
+#endif  // UNIT_TEST
+  uint8_t remote_state[kMitsubishiACStateLength];  ///< The state in code form.
   void checksum(void);
   static uint8_t calculateChecksum(const uint8_t* data);
 };
 
+/// Class for handling detailed Mitsubishi 136-bit A/C messages.
 class IRMitsubishi136 {
  public:
   explicit IRMitsubishi136(const uint16_t pin, const bool inverted = false,
                            const bool use_modulation = true);
-
-
   void stateReset(void);
 #if SEND_MITSUBISHI136
   void send(const uint16_t repeat = kMitsubishi136MinRepeat);
-  uint8_t calibrate(void) { return _irsend.calibrate(); }
+  /// Run the calibration to calculate uSec timing offsets for this platform.
+  /// @return The uSec timing offset needed per modulation of the IR Led.
+  /// @note This will produce a 65ms IR signal pulse at 38kHz.
+  ///   Only ever needs to be run once per object instantiation, if at all.
+  int8_t calibrate(void) { return _irsend.calibrate(); }
 #endif  // SEND_MITSUBISHI136
   void begin(void);
   static bool validChecksum(const uint8_t* data,
@@ -247,25 +272,29 @@ class IRMitsubishi136 {
 #ifndef UNIT_TEST
 
  private:
-  IRsend _irsend;
-#else
-  IRsendTest _irsend;
-#endif
-  uint8_t remote_state[kMitsubishi136StateLength];
+  IRsend _irsend;  ///< Instance of the IR send class
+#else  // UNIT_TEST
+  /// @cond IGNORE
+  IRsendTest _irsend;  ///< Instance of the testing IR send class
+  /// @endcond
+#endif  // UNIT_TEST
+  uint8_t remote_state[kMitsubishi136StateLength];  ///< The state in code form.
   void checksum(void);
 };
 
-
+/// Class for handling detailed Mitsubishi 122-bit A/C messages.
 class IRMitsubishi112 {
  public:
   explicit IRMitsubishi112(const uint16_t pin, const bool inverted = false,
                            const bool use_modulation = true);
-
-
   void stateReset(void);
 #if SEND_MITSUBISHI112
   void send(const uint16_t repeat = kMitsubishi112MinRepeat);
-  uint8_t calibrate(void) { return _irsend.calibrate(); }
+  /// Run the calibration to calculate uSec timing offsets for this platform.
+  /// @return The uSec timing offset needed per modulation of the IR Led.
+  /// @note This will produce a 65ms IR signal pulse at 38kHz.
+  ///   Only ever needs to be run once per object instantiation, if at all.
+  int8_t calibrate(void) { return _irsend.calibrate(); }
 #endif  // SEND_MITSUBISHI112
   void begin(void);
   void on(void);
@@ -299,11 +328,13 @@ class IRMitsubishi112 {
 #ifndef UNIT_TEST
 
  private:
-  IRsend _irsend;
-#else
-  IRsendTest _irsend;
-#endif
-  uint8_t remote_state[kMitsubishi112StateLength];
+  IRsend _irsend;  ///< Instance of the IR send class
+#else  // UNIT_TEST
+  /// @cond IGNORE
+  IRsendTest _irsend;  ///< Instance of the testing IR send class
+  /// @endcond
+#endif  // UNIT_TEST
+  uint8_t remote_state[kMitsubishi112StateLength];  ///< The state in code form.
   void checksum(void);
 };
 

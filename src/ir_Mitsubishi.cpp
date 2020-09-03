@@ -3,7 +3,18 @@
 // Copyright 2019 Mark Kuchel
 // Copyright 2018 Denes Varga
 
-// Mitsubishi
+/// @file
+/// @brief Support for Mitsubishi protocols.
+/// Mitsubishi (TV) decoding added from https://github.com/z3t0/Arduino-IRremote
+/// Mitsubishi (TV) sending & Mitsubishi A/C support added by David Conran
+/// @see GlobalCache's Control Tower's Mitsubishi TV data.
+/// @see https://github.com/marcosamarinho/IRremoteESP8266/blob/master/ir_Mitsubishi.cpp
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/441
+/// @see https://github.com/r45635/HVAC-IR-Control/blob/master/HVAC_ESP8266/HVAC_ESP8266.ino#L84
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/619
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/888
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/947
+/// @see https://github.com/kuchel77
 
 #include "ir_Mitsubishi.h"
 #include <algorithm>
@@ -17,15 +28,9 @@
 #include "IRutils.h"
 #include "ir_Tcl.h"
 
-// Mitsubishi (TV) decoding added from https://github.com/z3t0/Arduino-IRremote
-// Mitsubishi (TV) sending & Mitsubishi A/C support added by David Conran
-
 // Constants
 // Mitsubishi TV
 // period time is 1/33000Hz = 30.303 uSeconds (T)
-// Ref:
-//   GlobalCache's Control Tower's Mitsubishi TV data.
-//   https://github.com/marcosamarinho/IRremoteESP8266/blob/master/ir_Mitsubishi.cpp
 const uint16_t kMitsubishiTick = 30;
 const uint16_t kMitsubishiBitMarkTicks = 10;
 const uint16_t kMitsubishiBitMark = kMitsubishiBitMarkTicks * kMitsubishiTick;
@@ -41,9 +46,6 @@ const uint16_t kMitsubishiMinGapTicks = 936;
 const uint16_t kMitsubishiMinGap = kMitsubishiMinGapTicks * kMitsubishiTick;
 
 // Mitsubishi Projector (HC3000)
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/441
-
 const uint16_t kMitsubishi2HdrMark = 8400;
 const uint16_t kMitsubishi2HdrSpace = kMitsubishi2HdrMark / 2;
 const uint16_t kMitsubishi2BitMark = 560;
@@ -52,9 +54,6 @@ const uint16_t kMitsubishi2OneSpace = kMitsubishi2ZeroSpace * 3;
 const uint16_t kMitsubishi2MinGap = 28500;
 
 // Mitsubishi A/C
-// Ref:
-//   https://github.com/r45635/HVAC-IR-Control/blob/master/HVAC_ESP8266/HVAC_ESP8266.ino#L84
-
 const uint16_t kMitsubishiAcHdrMark = 3400;
 const uint16_t kMitsubishiAcHdrSpace = 1750;
 const uint16_t kMitsubishiAcBitMark = 450;
@@ -65,9 +64,6 @@ const uint16_t kMitsubishiAcRptSpace = 17100;
 const uint8_t  kMitsubishiAcExtraTolerance = 5;
 
 // Mitsubishi 136 bit A/C
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/888
-
 const uint16_t kMitsubishi136HdrMark = 3324;
 const uint16_t kMitsubishi136HdrSpace = 1474;
 const uint16_t kMitsubishi136BitMark = 467;
@@ -76,9 +72,6 @@ const uint16_t kMitsubishi136ZeroSpace = 351;
 const uint32_t kMitsubishi136Gap = kDefaultMessageGap;
 
 // Mitsubishi 112 bit A/C
-// Ref:
-//   https://github.com/kuchel77
-
 const uint16_t kMitsubishi112HdrMark = 3450;
 const uint16_t kMitsubishi112HdrSpace = 1696;
 const uint16_t kMitsubishi112BitMark = 450;
@@ -100,20 +93,14 @@ using irutils::setBit;
 using irutils::setBits;
 
 #if SEND_MITSUBISHI
-// Send a Mitsubishi message
-//
-// Args:
-//   data:   Contents of the message to be sent.
-//   nbits:  Nr. of bits of data to be sent. Typically kMitsubishiBits.
-//   repeat: Nr. of additional times the message is to be sent.
-//
-// Status: ALPHA / untested.
-//
-// Notes:
-//   This protocol appears to have no header.
-// Ref:
-//   https://github.com/marcosamarinho/IRremoteESP8266/blob/master/ir_Mitsubishi.cpp
-//   GlobalCache's Control Tower's Mitsubishi TV data.
+/// Send the supplied Mitsubishi 16-bit message.
+/// Status: STABLE / Working.
+/// @param[in] data The message to be sent.
+/// @param[in] nbits The number of bits of message to be sent.
+/// @param[in] repeat The number of times the command is to be repeated.
+/// @note This protocol appears to have no header.
+/// @see https://github.com/marcosamarinho/IRremoteESP8266/blob/master/ir_Mitsubishi.cpp
+/// @see GlobalCache's Control Tower's Mitsubishi TV data.
 void IRsend::sendMitsubishi(uint64_t data, uint16_t nbits, uint16_t repeat) {
   sendGeneric(0, 0,  // No Header
               kMitsubishiBitMark, kMitsubishiOneSpace, kMitsubishiBitMark,
@@ -123,28 +110,21 @@ void IRsend::sendMitsubishi(uint64_t data, uint16_t nbits, uint16_t repeat) {
 #endif  // SEND_MITSUBISHI
 
 #if DECODE_MITSUBISHI
-// Decode the supplied Mitsubishi message.
-//
-// Args:
-//   results: Ptr to the data to decode and where to store the decode result.
-//   nbits:   Nr. of data bits to expect.
-//   strict:  Flag indicating if we should perform strict matching.
-// Returns:
-//   boolean: True if it can decode it, false if it can't.
-//
-// Status: BETA / previously working.
-//
-// Notes:
-//   This protocol appears to have no header.
-//
-// Ref:
-//   GlobalCache's Control Tower's Mitsubishi TV data.
-bool IRrecv::decodeMitsubishi(decode_results *results, uint16_t nbits,
-                              bool strict) {
+/// Decode the supplied Mitsubishi 16-bit message.
+/// Status: STABLE / Working.
+/// @param[in,out] results Ptr to the data to decode & where to store the result
+/// @param[in] offset The starting index to use when attempting to decode the
+///   raw data. Typically/Defaults to kStartOffset.
+/// @param[in] nbits The number of data bits to expect.
+/// @param[in] strict Flag indicating if we should perform strict matching.
+/// @return True if it can decode it, false if it can't.
+/// @note This protocol appears to have no header.
+/// @see GlobalCache's Control Tower's Mitsubishi TV data.
+bool IRrecv::decodeMitsubishi(decode_results *results, uint16_t offset,
+                              const uint16_t nbits, const bool strict) {
   if (strict && nbits != kMitsubishiBits)
     return false;  // Request is out of spec.
 
-  uint16_t offset = kStartOffset;
   uint64_t data = 0;
 
   // Match Data + Footer
@@ -166,24 +146,18 @@ bool IRrecv::decodeMitsubishi(decode_results *results, uint16_t nbits,
 #endif  // DECODE_MITSUBISHI
 
 #if SEND_MITSUBISHI2
-// Send a Mitsubishi2 message
-//
-// Args:
-//   data:   Contents of the message to be sent.
-//   nbits:  Nr. of bits of data to be sent. Typically kMitsubishiBits.
-//   repeat: Nr. of additional times the message is to be sent.
-//
-// Status: ALPHA / untested.
-//
-// Notes:
-//   Based on a Mitsubishi HC3000 projector's remote.
-//   This protocol appears to have a manditory in-protocol repeat.
-//   That is in *addition* to the entire message needing to be sent twice
-//   for the device to accept the command. That is separate from the repeat.
-//   i.e. Allegedly, the real remote requires the "Off" button pressed twice.
-//        You will need to add a suitable gap yourself.
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/441
+/// Send a supplied second variant Mitsubishi 16-bit message.
+/// Status: BETA / Probably works.
+/// @param[in] data The message to be sent.
+/// @param[in] nbits The number of bits of message to be sent.
+/// @param[in] repeat The number of times the command is to be repeated.
+/// @note Based on a Mitsubishi HC3000 projector's remote.
+///   This protocol appears to have a manditory in-protocol repeat.
+///   That is in *addition* to the entire message needing to be sent twice
+///   for the device to accept the command. That is separate from the repeat.
+///   i.e. Allegedly, the real remote requires the "Off" button pressed twice.
+///        You will need to add a suitable gap yourself.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/441
 void IRsend::sendMitsubishi2(uint64_t data, uint16_t nbits, uint16_t repeat) {
   for (uint16_t i = 0; i <= repeat; i++) {
     // First half of the data.
@@ -202,31 +176,22 @@ void IRsend::sendMitsubishi2(uint64_t data, uint16_t nbits, uint16_t repeat) {
 #endif  // SEND_MITSUBISHI2
 
 #if DECODE_MITSUBISHI2
-// Decode the supplied Mitsubishi2 message.
-//
-// Args:
-//   results: Ptr to the data to decode and where to store the decode result.
-//   nbits:   Nr. of data bits to expect.
-//   strict:  Flag indicating if we should perform strict matching.
-// Returns:
-//   boolean: True if it can decode it, false if it can't.
-//
-// Status: BETA / Works with simulated data.
-//
-// Notes:
-//   Hardware supported:
-//     * Mitsubishi HC3000 projector's remote.
-//
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/441
-bool IRrecv::decodeMitsubishi2(decode_results *results, uint16_t nbits,
-                               bool strict) {
-  if (results->rawlen < 2 * nbits + kHeader + (kFooter * 2) - 1)
+/// Decode the supplied second variation of a Mitsubishi 16-bit message.
+/// Status: STABLE / Working.
+/// @param[in,out] results Ptr to the data to decode & where to store the result
+/// @param[in] offset The starting index to use when attempting to decode the
+///   raw data. Typically/Defaults to kStartOffset.
+/// @param[in] nbits The number of data bits to expect.
+/// @param[in] strict Flag indicating if we should perform strict matching.
+/// @return True if it can decode it, false if it can't.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/441
+bool IRrecv::decodeMitsubishi2(decode_results *results, uint16_t offset,
+                               const uint16_t nbits, const bool strict) {
+  if (results->rawlen <= 2 * nbits + kHeader + (kFooter * 2) - 1 + offset)
     return false;  // Shorter than shortest possibly expected.
   if (strict && nbits != kMitsubishiBits)
     return false;  // Request is out of spec.
 
-  uint16_t offset = kStartOffset;
   results->value = 0;
 
   // Header
@@ -260,16 +225,11 @@ bool IRrecv::decodeMitsubishi2(decode_results *results, uint16_t nbits,
 #endif  // DECODE_MITSUBISHI2
 
 #if SEND_MITSUBISHI_AC
-// Send a Mitsubishi A/C message.
-//
-// Args:
-//   data: An array of bytes containing the IR command.
-//   nbytes: Nr. of bytes of data in the array. (>=kMitsubishiACStateLength)
-//   repeat: Nr. of times the message is to be repeated.
-//          (Default = kMitsubishiACMinRepeat).
-//
-// Status: BETA / Appears to be working.
-//
+/// Send a Mitsubishi 144-bit A/C formatted message. (MITSUBISHI_AC)
+/// Status: STABLE / Working.
+/// @param[in] data The message to be sent.
+/// @param[in] nbytes The number of bytes of message to be sent.
+/// @param[in] repeat The number of times the command is to be repeated.
 void IRsend::sendMitsubishiAC(const unsigned char data[], const uint16_t nbytes,
                               const uint16_t repeat) {
   if (nbytes < kMitsubishiACStateLength)
@@ -283,22 +243,18 @@ void IRsend::sendMitsubishiAC(const unsigned char data[], const uint16_t nbytes,
 #endif  // SEND_MITSUBISHI_AC
 
 #if DECODE_MITSUBISHI_AC
-// Decode the supplied Mitsubishi message.
-//
-// Args:
-//   results: Ptr to the data to decode and where to store the decode result.
-//   nbits:   Nr. of data bits to expect.
-//   strict:  Flag indicating if we should perform strict matching.
-// Returns:
-//   boolean: True if it can decode it, false if it can't.
-//
-// Status: ALPHA / Under development
-//
-// Ref:
-// https://www.analysir.com/blog/2015/01/06/reverse-engineering-mitsubishi-ac-infrared-protocol/
-bool IRrecv::decodeMitsubishiAC(decode_results *results, uint16_t nbits,
-                                bool strict) {
-  if (results->rawlen < ((kMitsubishiACBits * 2) + 2)) {
+/// Decode the supplied Mitsubish 144-bit A/C message.
+/// Status: BETA / Probably works
+/// @param[in,out] results Ptr to the data to decode & where to store the result
+/// @param[in] offset The starting index to use when attempting to decode the
+///   raw data. Typically/Defaults to kStartOffset.
+/// @param[in] nbits The number of data bits to expect.
+/// @param[in] strict Flag indicating if we should perform strict matching.
+/// @see https://www.analysir.com/blog/2015/01/06/reverse-engineering-mitsubishi-ac-infrared-protocol/
+bool IRrecv::decodeMitsubishiAC(decode_results *results, uint16_t offset,
+                                const uint16_t nbits,
+                                const bool strict) {
+  if (results->rawlen <= ((kMitsubishiACBits * 2) + 2) + offset) {
     DPRINTLN("Shorter than shortest possibly expected.");
     return false;  // Shorter than shortest possibly expected.
   }
@@ -306,10 +262,7 @@ bool IRrecv::decodeMitsubishiAC(decode_results *results, uint16_t nbits,
     DPRINTLN("Request is out of spec.");
     return false;  // Request is out of spec.
   }
-  uint16_t offset = kStartOffset;
-  for (uint8_t i = 0; i < kMitsubishiACStateLength; i++) {
-    results->state[i] = 0;
-  }
+  for (uint8_t i = 0; i < kMitsubishiACStateLength; i++) results->state[i] = 0;
   bool failure = false;
   uint8_t rep = 0;
   do {
@@ -421,90 +374,103 @@ bool IRrecv::decodeMitsubishiAC(decode_results *results, uint16_t nbits,
 // Code to emulate Mitsubishi A/C IR remote control unit.
 // Inspired and derived from the work done at:
 //   https://github.com/r45635/HVAC-IR-Control
-//
-// Warning: Consider this very alpha code. Seems to work, but not validated.
-//
-// Equipment it seems compatible with:
-//  * <Add models (A/C & remotes) you've gotten it working with here>
-// Initialise the object.
+
+/// Class constructor
+/// @param[in] pin GPIO to be used when sending.
+/// @param[in] inverted Is the output signal to be inverted?
+/// @param[in] use_modulation Is frequency modulation to be used?
+/// @warning Consider this very alpha code. Seems to work, but not validated.
 IRMitsubishiAC::IRMitsubishiAC(const uint16_t pin, const bool inverted,
                                const bool use_modulation)
     : _irsend(pin, inverted, use_modulation) { this->stateReset(); }
 
-// Reset the state of the remote to a known good state/sequence.
+/// Reset the state of the remote to a known good state/sequence.
 void IRMitsubishiAC::stateReset(void) {
   // The state of the IR remote in IR code form.
   // Known good state obtained from:
   //   https://github.com/r45635/HVAC-IR-Control/blob/master/HVAC_ESP8266/HVAC_ESP8266.ino#L108
   static const uint8_t kReset[kMitsubishiACStateLength] = {
-      0x23, 0xCB, 0x26, 0x01, 0x00, 0x20, 0x08, 0x06, 0x30, 0x45, 0x67, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x1F};
-  memcpy(remote_state, kReset, kMitsubishiACStateLength);
+      0x23, 0xCB, 0x26, 0x01, 0x00, 0x20, 0x08, 0x06, 0x30, 0x45, 0x67};
+  setRaw(kReset);
 }
 
-// Configure the pin for output.
+/// Set up hardware to be able to send a message.
 void IRMitsubishiAC::begin(void) { _irsend.begin(); }
 
 #if SEND_MITSUBISHI_AC
-// Send the current desired state to the IR LED.
+/// Send the current internal state as an IR message.
+/// @param[in] repeat Nr. of times the message will be repeated.
 void IRMitsubishiAC::send(const uint16_t repeat) {
   _irsend.sendMitsubishiAC(getRaw(), kMitsubishiACStateLength, repeat);
 }
 #endif  // SEND_MITSUBISHI_AC
 
-// Return a pointer to the internal state date of the remote.
+/// Get a PTR to the internal state/code for this protocol.
+/// @return PTR to a code for this protocol based on the current internal state.
 uint8_t *IRMitsubishiAC::getRaw(void) {
   this->checksum();
   return remote_state;
 }
 
+/// Set the internal state from a valid code for this protocol.
+/// @param[in] data A valid code for this protocol.
 void IRMitsubishiAC::setRaw(const uint8_t *data) {
   memcpy(remote_state, data, kMitsubishiACStateLength);
 }
 
-// Calculate the checksum for the current internal state of the remote.
+/// Calculate and set the checksum values for the internal state.
 void IRMitsubishiAC::checksum(void) {
   remote_state[kMitsubishiACStateLength - 1] = calculateChecksum(remote_state);
 }
 
+/// Verify the checksum is valid for a given state.
+/// @param[in] data The array to verify the checksum of.
+/// @return true, if the state has a valid checksum. Otherwise, false.
 bool IRMitsubishiAC::validChecksum(const uint8_t *data) {
   return calculateChecksum(data) == data[kMitsubishiACStateLength - 1];
 }
 
+/// Calculate the checksum for a given state.
+/// @param[in] data The value to calc the checksum of.
+/// @return The calculated checksum value.
 uint8_t IRMitsubishiAC::calculateChecksum(const uint8_t *data) {
   return sumBytes(data, kMitsubishiACStateLength - 1);
 }
 
-// Set the requested power state of the A/C to on.
+/// Set the requested power state of the A/C to on.
 void IRMitsubishiAC::on(void) { setPower(true); }
 
-// Set the requested power state of the A/C to off.
+/// Set the requested power state of the A/C to off.
 void IRMitsubishiAC::off(void) { setPower(false); }
 
-// Set the requested power state of the A/C.
+/// Change the power setting.
+/// @param[in] on true, the setting is on. false, the setting is off.
 void IRMitsubishiAC::setPower(bool on) {
   setBit(&remote_state[5], kMitsubishiAcPowerOffset, on);
 }
 
-// Return the requested power state of the A/C.
+/// Get the value of the current power setting.
+/// @return true, the setting is on. false, the setting is off.
 bool IRMitsubishiAC::getPower(void) {
   return GETBIT8(remote_state[5], kMitsubishiAcPowerOffset);
 }
 
-// Set the temp. in deg C
+/// Set the temperature.
+/// @param[in] degrees The temperature in degrees celsius.
 void IRMitsubishiAC::setTemp(const uint8_t degrees) {
   uint8_t temp = std::max((uint8_t)kMitsubishiAcMinTemp, degrees);
   temp = std::min((uint8_t)kMitsubishiAcMaxTemp, temp);
   remote_state[7] = temp - kMitsubishiAcMinTemp;
 }
 
-// Return the set temp. in deg C
+/// Get the current temperature setting.
+/// @return The current setting for temp. in degrees celsius.
 uint8_t IRMitsubishiAC::getTemp(void) {
   return (remote_state[7] + kMitsubishiAcMinTemp);
 }
 
-// Set the speed of the fan, 0-6.
-// 0 is auto, 1-5 is the speed, 6 is silent.
+/// Set the speed of the fan.
+/// @param[in] speed The desired setting. 0 is auto, 1-5 is speed, 6 is silent.
 void IRMitsubishiAC::setFan(const uint8_t speed) {
   uint8_t fan = speed;
   // Bounds check
@@ -518,7 +484,8 @@ void IRMitsubishiAC::setFan(const uint8_t speed) {
   setBits(&remote_state[9], kMitsubishiAcFanOffset, kMitsubishiAcFanSize, fan);
 }
 
-// Return the requested state of the unit's fan.
+/// Get the current fan speed setting.
+/// @return The current fan speed/mode.
 uint8_t IRMitsubishiAC::getFan(void) {
   uint8_t fan = GETBITS8(remote_state[9], kMitsubishiAcFanOffset,
                          kMitsubishiAcFanSize);
@@ -526,12 +493,14 @@ uint8_t IRMitsubishiAC::getFan(void) {
   return fan;
 }
 
-// Return the requested climate operation mode of the a/c unit.
+/// Get the operating mode setting of the A/C.
+/// @return The current operating mode setting.
 uint8_t IRMitsubishiAC::getMode(void) {
   return GETBITS8(remote_state[6], kMitsubishiAcModeOffset, kModeBitsSize);
 }
 
-// Set the requested climate operation mode of the a/c unit.
+/// Set the operating mode of the A/C.
+/// @param[in] mode The desired operating mode.
 void IRMitsubishiAC::setMode(const uint8_t mode) {
   // If we get an unexpected mode, default to AUTO.
   switch (mode) {
@@ -546,7 +515,8 @@ void IRMitsubishiAC::setMode(const uint8_t mode) {
   setBits(&remote_state[6], kMitsubishiAcModeOffset, kModeBitsSize, mode);
 }
 
-// Set the requested vane operation mode of the a/c unit.
+/// Set the requested vane (Vertical Swing) operation mode of the a/c unit.
+/// @param[in] position The position/mode to set the vane to.
 void IRMitsubishiAC::setVane(const uint8_t position) {
   uint8_t pos = std::min(position, kMitsubishiAcVaneAutoMove);  // bounds check
   setBit(&remote_state[9], kMitsubishiAcVaneBitOffset);
@@ -554,62 +524,83 @@ void IRMitsubishiAC::setVane(const uint8_t position) {
           pos);
 }
 
-// Set the requested wide-vane operation mode of the a/c unit.
+/// Set the requested wide-vane (Horizontal Swing) operation mode of the a/c.
+/// @param[in] position The position/mode to set the wide vane to.
 void IRMitsubishiAC::setWideVane(const uint8_t position) {
   setBits(&remote_state[8], kHighNibble, kNibbleSize,
           std::min(position, kMitsubishiAcWideVaneAuto));
 }
 
-// Return the requested vane operation mode of the a/c unit.
+/// Get the Vane (Vertical Swing) mode of the A/C.
+/// @return The native position/mode setting.
 uint8_t IRMitsubishiAC::getVane(void) {
   return GETBITS8(remote_state[9], kMitsubishiAcVaneOffset,
                   kMitsubishiAcVaneSize);
 }
 
-// Return the requested wide vane operation mode of the a/c unit.
+/// Get the Wide Vane (Horizontal Swing) mode of the A/C.
+/// @return The native position/mode setting.
 uint8_t IRMitsubishiAC::getWideVane(void) {
   return GETBITS8(remote_state[8], kHighNibble, kNibbleSize);
 }
 
-// Return the clock setting of the message. 1=1/6 hour. e.g. 4pm = 48
+/// Get the clock time of the A/C unit.
+/// @return Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 4pm = 48.
 uint8_t IRMitsubishiAC::getClock(void) { return remote_state[10]; }
 
-// Set the current time. 1 = 1/6 hour. e.g. 6am = 36.
+/// Set the clock time on the A/C unit.
+/// @param[in] clock Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 6am = 36.
 void IRMitsubishiAC::setClock(const uint8_t clock) {
   remote_state[10] = clock;
 }
 
-// Return the desired start time. 1 = 1/6 hour. e.g. 1am = 6
+/// Get the desired start time of the A/C unit.
+/// @return Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 4pm = 48.
 uint8_t IRMitsubishiAC::getStartClock(void) { return remote_state[12]; }
 
-// Set the desired start time of the AC.  1 = 1/6 hour. e.g. 8pm = 120
+/// Set the desired start time of the A/C unit.
+/// @param[in] clock Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 8pm = 120.
 void IRMitsubishiAC::setStartClock(const uint8_t clock) {
   remote_state[12] = clock;
 }
 
-// Return the desired stop time of the AC. 1 = 1/6 hour. e.g 10pm = 132
+/// Get the desired stop time of the A/C unit.
+/// @return Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 10pm = 132.
 uint8_t IRMitsubishiAC::getStopClock(void) { return remote_state[11]; }
 
-// Set the desired stop time of the AC. 1 = 1/6 hour. e.g 10pm = 132
+/// Set the desired stop time of the A/C unit.
+/// @param[in] clock Nr. of 10 minute increments past midnight.
+/// @note 1 = 1/6 hour (10 minutes). e.g. 10pm = 132.
 void IRMitsubishiAC::setStopClock(const uint8_t clock) {
   remote_state[11] = clock;
 }
 
-// Return the timer setting. Possible values: kMitsubishiAcNoTimer,
-//  kMitsubishiAcStartTimer, kMitsubishiAcStopTimer,
-//  kMitsubishiAcStartStopTimer
+/// Get the timers active setting of the A/C.
+/// @return The current timers enabled.
+/// @note Possible values: kMitsubishiAcNoTimer,
+///   kMitsubishiAcStartTimer, kMitsubishiAcStopTimer,
+///   kMitsubishiAcStartStopTimer
 uint8_t IRMitsubishiAC::getTimer(void) {
   return GETBITS8(remote_state[13], 0, 3);
 }
 
-// Set the timer setting. Possible values: kMitsubishiAcNoTimer,
-//  kMitsubishiAcStartTimer, kMitsubishiAcStopTimer,
-//  kMitsubishiAcStartStopTimer
+/// Set the timers active setting of the A/C.
+/// @param[in] timer The timer code indicating which ones are active.
+/// @note Possible values: kMitsubishiAcNoTimer,
+///   kMitsubishiAcStartTimer, kMitsubishiAcStopTimer,
+///   kMitsubishiAcStartStopTimer
 void IRMitsubishiAC::setTimer(uint8_t timer) {
   setBits(&remote_state[13], 0, 3, timer);
 }
 
-// Convert a standard A/C mode into its native mode.
+/// Convert a stdAc::opmode_t enum into its native mode.
+/// @param[in] mode The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishiAC::convertMode(const stdAc::opmode_t mode) {
   switch (mode) {
     case stdAc::opmode_t::kCool: return kMitsubishiAcCool;
@@ -619,7 +610,9 @@ uint8_t IRMitsubishiAC::convertMode(const stdAc::opmode_t mode) {
   }
 }
 
-// Convert a standard A/C Fan speed into its native fan speed.
+/// Convert a stdAc::fanspeed_t enum into it's native speed.
+/// @param[in] speed The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishiAC::convertFan(const stdAc::fanspeed_t speed) {
   switch (speed) {
     case stdAc::fanspeed_t::kMin:    return kMitsubishiAcFanSilent;
@@ -631,7 +624,10 @@ uint8_t IRMitsubishiAC::convertFan(const stdAc::fanspeed_t speed) {
   }
 }
 
-// Convert a standard A/C vertical swing into its native setting.
+
+/// Convert a stdAc::swingv_t enum into it's native setting.
+/// @param[in] position The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishiAC::convertSwingV(const stdAc::swingv_t position) {
   switch (position) {
     case stdAc::swingv_t::kHighest: return kMitsubishiAcVaneAutoMove - 6;
@@ -644,7 +640,9 @@ uint8_t IRMitsubishiAC::convertSwingV(const stdAc::swingv_t position) {
   }
 }
 
-// Convert a standard A/C wide wane swing into its native setting.
+/// Convert a stdAc::swingh_t enum into it's native setting.
+/// @param[in] position The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishiAC::convertSwingH(const stdAc::swingh_t position) {
   switch (position) {
     case stdAc::swingh_t::kLeftMax:  return kMitsubishiAcWideVaneAuto - 7;
@@ -658,7 +656,9 @@ uint8_t IRMitsubishiAC::convertSwingH(const stdAc::swingh_t position) {
   }
 }
 
-// Convert a native mode to it's common equivalent.
+/// Convert a native mode into its stdAc equivilant.
+/// @param[in] mode The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::opmode_t IRMitsubishiAC::toCommonMode(const uint8_t mode) {
   switch (mode) {
     case kMitsubishiAcCool: return stdAc::opmode_t::kCool;
@@ -668,7 +668,9 @@ stdAc::opmode_t IRMitsubishiAC::toCommonMode(const uint8_t mode) {
   }
 }
 
-// Convert a native fan speed to it's common equivalent.
+/// Convert a native fan speed into its stdAc equivilant.
+/// @param[in] speed The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::fanspeed_t IRMitsubishiAC::toCommonFanSpeed(const uint8_t speed) {
   switch (speed) {
     case kMitsubishiAcFanRealMax:     return stdAc::fanspeed_t::kMax;
@@ -680,7 +682,9 @@ stdAc::fanspeed_t IRMitsubishiAC::toCommonFanSpeed(const uint8_t speed) {
   }
 }
 
-// Convert a native vertical swing to it's common equivalent.
+/// Convert a native vertical swing postion to it's common equivalent.
+/// @param[in] pos A native position to convert.
+/// @return The common vertical swing position.
 stdAc::swingv_t IRMitsubishiAC::toCommonSwingV(const uint8_t pos) {
   switch (pos) {
     case 1:  return stdAc::swingv_t::kHighest;
@@ -692,7 +696,9 @@ stdAc::swingv_t IRMitsubishiAC::toCommonSwingV(const uint8_t pos) {
   }
 }
 
-// Convert a native horizontal swing to it's common equivalent.
+/// Convert a native horizontal swing postion to it's common equivalent.
+/// @param[in] pos A native position to convert.
+/// @return The common horizontal swing position.
 stdAc::swingh_t IRMitsubishiAC::toCommonSwingH(const uint8_t pos) {
   switch (pos) {
     case 1:  return stdAc::swingh_t::kLeftMax;
@@ -705,7 +711,8 @@ stdAc::swingh_t IRMitsubishiAC::toCommonSwingH(const uint8_t pos) {
   }
 }
 
-// Convert the A/C state to it's common equivalent.
+/// Convert the current internal state into its stdAc::state_t equivilant.
+/// @return The stdAc equivilant of the native settings.
 stdAc::state_t IRMitsubishiAC::toCommon(void) {
   stdAc::state_t result;
   result.protocol = decode_type_t::MITSUBISHI_AC;
@@ -730,7 +737,8 @@ stdAc::state_t IRMitsubishiAC::toCommon(void) {
   return result;
 }
 
-// Convert the internal state into a human readable string.
+/// Convert the internal state into a human readable string.
+/// @return A string containing the settings in human-readable form.
 String IRMitsubishiAC::toString(void) {
   String result = "";
   result.reserve(110);  // Reserve some heap for the string to reduce fragging.
@@ -746,9 +754,16 @@ String IRMitsubishiAC::toString(void) {
   result += addIntToString(this->getVane(), kSwingVStr);
   result += kSpaceLBraceStr;
   switch (this->getVane()) {
-    case kMitsubishiAcVaneAuto:     result += kAutoStr; break;
-    case kMitsubishiAcVaneAutoMove: result += kAutoStr + ' ' + kMoveStr; break;
-    default:                        result += kUnknownStr;
+    case kMitsubishiAcVaneAuto:
+      result += kAutoStr;
+      break;
+    case kMitsubishiAcVaneAutoMove:
+      result += kAutoStr;
+      result += ' ';
+      result += kMoveStr;
+      break;
+    default:
+      result += kUnknownStr;
   }
   result += ')';
   result += addIntToString(this->getWideVane(), kSwingHStr);
@@ -761,7 +776,9 @@ String IRMitsubishiAC::toString(void) {
   result += addLabeledString(minsToString(getClock() * 10), kClockStr);
   result += addLabeledString(minsToString(getStartClock() * 10), kOnTimerStr);
   result += addLabeledString(minsToString(getStopClock() * 10), kOffTimerStr);
-  result += kCommaSpaceStr + kTimerStr + kColonSpaceStr;
+  result += kCommaSpaceStr;
+  result += kTimerStr;
+  result += kColonSpaceStr;
   switch (this->getTimer()) {
     case kMitsubishiAcNoTimer:
       result += '-';
@@ -773,7 +790,9 @@ String IRMitsubishiAC::toString(void) {
       result += kStopStr;
       break;
     case kMitsubishiAcStartStopTimer:
-      result += kStartStr + '+' + kStopStr;
+      result += kStartStr;
+      result += '+';
+      result += kStopStr;
       break;
     default:
       result += F("? (");
@@ -784,18 +803,12 @@ String IRMitsubishiAC::toString(void) {
 }
 
 #if SEND_MITSUBISHI136
-// Send a Mitsubishi136 A/C message.
-//
-// Args:
-//   data: An array of bytes containing the IR command.
-//   nbytes: Nr. of bytes of data in the array. (>=kMitsubishi136StateLength)
-//   repeat: Nr. of times the message is to be repeated.
-//          (Default = kMitsubishi136MinRepeat).
-//
-// Status: ALPHA / Probably working. Needs to be tested against a real device.
-//
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/888
+/// Send a Mitsubishi 136-bit A/C message. (MITSUBISHI136)
+/// Status: BETA / Probably working. Needs to be tested against a real device.
+/// @param[in] data The message to be sent.
+/// @param[in] nbytes The number of bytes of message to be sent.
+/// @param[in] repeat The number of times the command is to be repeated.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/888
 void IRsend::sendMitsubishi136(const unsigned char data[],
                                const uint16_t nbytes,
                                const uint16_t repeat) {
@@ -811,29 +824,23 @@ void IRsend::sendMitsubishi136(const unsigned char data[],
 #endif  // SEND_MITSUBISHI136
 
 #if DECODE_MITSUBISHI136
-// Decode the supplied Mitsubishi136 message.
-//
-// Args:
-//   results: Ptr to the data to decode and where to store the decode result.
-//   nbits:   Nr. of data bits to expect.
-//   strict:  Flag indicating if we should perform strict matching.
-// Returns:
-//   boolean: True if it can decode it, false if it can't.
-//
-// Status: STABLE / Reported as working.
-//
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/888
-bool IRrecv::decodeMitsubishi136(decode_results *results, const uint16_t nbits,
+/// Decode the supplied Mitsubishi 136-bit A/C message. (MITSUBISHI136)
+/// Status: STABLE / Reported as working.
+/// @param[in,out] results Ptr to the data to decode & where to store the result
+/// @param[in] offset The starting index to use when attempting to decode the
+///   raw data. Typically/Defaults to kStartOffset.
+/// @param[in] nbits The number of data bits to expect.
+/// @param[in] strict Flag indicating if we should perform strict matching.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/888
+bool IRrecv::decodeMitsubishi136(decode_results *results, uint16_t offset,
+                                 const uint16_t nbits,
                                  const bool strict) {
-  // Too short to match?
-  if (results->rawlen < (2 * nbits) + kHeader + kFooter - 1) return false;
   if (nbits % 8 != 0) return false;  // Not a multiple of an 8 bit byte.
   if (strict) {  // Do checks to see if it matches the spec.
     if (nbits != kMitsubishi136Bits) return false;
   }
-  uint16_t used = matchGeneric(results->rawbuf + kStartOffset, results->state,
-                               results->rawlen - kStartOffset, nbits,
+  uint16_t used = matchGeneric(results->rawbuf + offset, results->state,
+                               results->rawlen - offset, nbits,
                                kMitsubishi136HdrMark, kMitsubishi136HdrSpace,
                                kMitsubishi136BitMark, kMitsubishi136OneSpace,
                                kMitsubishi136BitMark, kMitsubishi136ZeroSpace,
@@ -854,17 +861,16 @@ bool IRrecv::decodeMitsubishi136(decode_results *results, const uint16_t nbits,
 #endif  // DECODE_MITSUBISHI136
 
 // Code to emulate Mitsubishi 136bit A/C IR remote control unit.
-//
-// Equipment it seems compatible with:
-//   Brand: Mitsubishi Electric,  Model: PEAD-RP71JAA Ducted A/C
-//   Brand: Mitsubishi Electric,  Model: 001CP T7WE10714 remote
 
-// Initialise the object.
+/// Class constructor
+/// @param[in] pin GPIO to be used when sending.
+/// @param[in] inverted Is the output signal to be inverted?
+/// @param[in] use_modulation Is frequency modulation to be used?
 IRMitsubishi136::IRMitsubishi136(const uint16_t pin, const bool inverted,
                                  const bool use_modulation)
     : _irsend(pin, inverted, use_modulation) { this->stateReset(); }
 
-// Reset the state of the remote to a known good state/sequence.
+/// Reset the state of the remote to a known good state/sequence.
 void IRMitsubishi136::stateReset(void) {
   // The state of the IR remote in IR code form.
   // Known good state obtained from:
@@ -874,13 +880,17 @@ void IRMitsubishi136::stateReset(void) {
   memcpy(remote_state, kReset, kMitsubishi136StateLength);
 }
 
-// Calculate the checksum for the current internal state of the remote.
+/// Calculate the checksum for the current internal state of the remote.
 void IRMitsubishi136::checksum(void) {
   for (uint8_t i = 0; i < 6; i++)
     remote_state[kMitsubishi136PowerByte + 6 + i] =
         ~remote_state[kMitsubishi136PowerByte + i];
 }
 
+/// Verify the checksum is valid for a given state.
+/// @param[in] data The array to verify the checksum of.
+/// @param[in] len The length of the data array.
+/// @return true, if the state has a valid checksum. Otherwise, false.
 bool IRMitsubishi136::validChecksum(const uint8_t *data, const uint16_t len) {
   if (len < kMitsubishi136StateLength) return false;
   const uint16_t half = (len - kMitsubishi136PowerByte) / 2;
@@ -893,44 +903,51 @@ bool IRMitsubishi136::validChecksum(const uint8_t *data, const uint16_t len) {
   return true;
 }
 
-// Configure the pin for output.
+/// Set up hardware to be able to send a message.
 void IRMitsubishi136::begin(void) { _irsend.begin(); }
 
 #if SEND_MITSUBISHI136
-// Send the current desired state to the IR LED.
+/// Send the current internal state as an IR message.
+/// @param[in] repeat Nr. of times the message will be repeated.
 void IRMitsubishi136::send(const uint16_t repeat) {
   _irsend.sendMitsubishi136(getRaw(), kMitsubishi136StateLength, repeat);
 }
 #endif  // SEND_MITSUBISHI136
 
-// Return a pointer to the internal state date of the remote.
+/// Get a PTR to the internal state/code for this protocol.
+/// @return PTR to a code for this protocol based on the current internal state.
 uint8_t *IRMitsubishi136::getRaw(void) {
   checksum();
   return remote_state;
 }
 
+/// Set the internal state from a valid code for this protocol.
+/// @param[in] data A valid code for this protocol.
 void IRMitsubishi136::setRaw(const uint8_t *data) {
   memcpy(remote_state, data, kMitsubishi136StateLength);
 }
 
-// Set the requested power state of the A/C to off.
+/// Set the requested power state of the A/C to on.
 void IRMitsubishi136::on(void) { setPower(true); }
 
-// Set the requested power state of the A/C to off.
+/// Set the requested power state of the A/C to off.
 void IRMitsubishi136::off(void) { setPower(false); }
 
-// Set the requested power state of the A/C.
+/// Change the power setting.
+/// @param[in] on true, the setting is on. false, the setting is off.
 void IRMitsubishi136::setPower(bool on) {
   setBit(&remote_state[kMitsubishi136PowerByte], kMitsubishi136PowerOffset, on);
 }
 
-// Return the requested power state of the A/C.
+/// Get the value of the current power setting.
+/// @return true, the setting is on. false, the setting is off.
 bool IRMitsubishi136::getPower(void) {
   return GETBIT8(remote_state[kMitsubishi136PowerByte],
                  kMitsubishi136PowerOffset);
 }
 
-// Set the temp. in deg C
+/// Set the temperature.
+/// @param[in] degrees The temperature in degrees celsius.
 void IRMitsubishi136::setTemp(const uint8_t degrees) {
   uint8_t temp = std::max((uint8_t)kMitsubishi136MinTemp, degrees);
   temp = std::min((uint8_t)kMitsubishi136MaxTemp, temp);
@@ -938,30 +955,36 @@ void IRMitsubishi136::setTemp(const uint8_t degrees) {
           temp - kMitsubishiAcMinTemp);
 }
 
-// Return the set temp. in deg C
+/// Get the current temperature setting.
+/// @return The current setting for temp. in degrees celsius.
 uint8_t IRMitsubishi136::getTemp(void) {
   return GETBITS8(remote_state[kMitsubishi136TempByte], kHighNibble,
                   kNibbleSize) + kMitsubishiAcMinTemp;
 }
 
+/// Set the speed of the fan.
+/// @param[in] speed The desired setting.
 void IRMitsubishi136::setFan(const uint8_t speed) {
   setBits(&remote_state[kMitsubishi136FanByte], kMitsubishi136FanOffset,
           kMitsubishi136FanSize, std::min(speed, kMitsubishi136FanMax));
 }
 
-// Return the requested state of the unit's fan.
+/// Get the current fan speed setting.
+/// @return The current fan speed/mode.
 uint8_t IRMitsubishi136::getFan(void) {
   return GETBITS8(remote_state[kMitsubishi136FanByte], kMitsubishi136FanOffset,
                   kMitsubishi136FanSize);
 }
 
-// Return the requested climate operation mode of the a/c unit.
+/// Get the operating mode setting of the A/C.
+/// @return The current operating mode setting.
 uint8_t IRMitsubishi136::getMode(void) {
   return GETBITS8(remote_state[kMitsubishi136ModeByte],
                   kMitsubishi136ModeOffset, kModeBitsSize);
 }
 
-// Set the requested climate operation mode of the a/c unit.
+/// Set the operating mode of the A/C.
+/// @param[in] mode The desired operating mode.
 void IRMitsubishi136::setMode(const uint8_t mode) {
   // If we get an unexpected mode, default to AUTO.
   switch (mode) {
@@ -978,7 +1001,8 @@ void IRMitsubishi136::setMode(const uint8_t mode) {
   }
 }
 
-// Set the requested vane operation mode of the a/c unit.
+/// Set the Vertical Swing mode of the A/C.
+/// @param[in] position The position/mode to set the swing to.
 void IRMitsubishi136::setSwingV(const uint8_t position) {
   // If we get an unexpected mode, default to auto.
   switch (position) {
@@ -995,24 +1019,30 @@ void IRMitsubishi136::setSwingV(const uint8_t position) {
   }
 }
 
-// Return the requested vane operation mode of the a/c unit.
+/// Get the Vertical Swing mode of the A/C.
+/// @return The native position/mode setting.
 uint8_t IRMitsubishi136::getSwingV(void) {
   return GETBITS8(remote_state[kMitsubishi136SwingVByte], kHighNibble,
                   kNibbleSize);
 }
 
-// Emulate a quiet setting. There is no true quiet setting on this a/c
+/// Set the Quiet mode of the A/C.
+/// @param[in] on true, the setting is on. false, the setting is off.
 void IRMitsubishi136::setQuiet(bool on) {
   if (on) setFan(kMitsubishi136FanQuiet);
   else if (getQuiet()) setFan(kMitsubishi136FanLow);
 }
 
-// Return the requested power state of the A/C.
+
+/// Get the Quiet mode of the A/C.
+/// @return true, the setting is on. false, the setting is off.
 bool IRMitsubishi136::getQuiet(void) {
   return getFan() == kMitsubishi136FanQuiet;
 }
 
-// Convert a standard A/C mode into its native mode.
+/// Convert a stdAc::opmode_t enum into its native mode.
+/// @param[in] mode The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi136::convertMode(const stdAc::opmode_t mode) {
   switch (mode) {
     case stdAc::opmode_t::kCool: return kMitsubishi136Cool;
@@ -1023,7 +1053,9 @@ uint8_t IRMitsubishi136::convertMode(const stdAc::opmode_t mode) {
   }
 }
 
-// Convert a standard A/C Fan speed into its native fan speed.
+/// Convert a stdAc::fanspeed_t enum into it's native speed.
+/// @param[in] speed The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi136::convertFan(const stdAc::fanspeed_t speed) {
   switch (speed) {
     case stdAc::fanspeed_t::kMin: return kMitsubishi136FanMin;
@@ -1034,7 +1066,9 @@ uint8_t IRMitsubishi136::convertFan(const stdAc::fanspeed_t speed) {
   }
 }
 
-// Convert a standard A/C vertical swing into its native setting.
+/// Convert a stdAc::swingv_t enum into it's native setting.
+/// @param[in] position The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi136::convertSwingV(const stdAc::swingv_t position) {
   switch (position) {
     case stdAc::swingv_t::kHighest: return kMitsubishi136SwingVHighest;
@@ -1046,7 +1080,9 @@ uint8_t IRMitsubishi136::convertSwingV(const stdAc::swingv_t position) {
   }
 }
 
-// Convert a native mode to it's common equivalent.
+/// Convert a native mode into its stdAc equivilant.
+/// @param[in] mode The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::opmode_t IRMitsubishi136::toCommonMode(const uint8_t mode) {
   switch (mode) {
     case kMitsubishi136Cool: return stdAc::opmode_t::kCool;
@@ -1057,7 +1093,9 @@ stdAc::opmode_t IRMitsubishi136::toCommonMode(const uint8_t mode) {
   }
 }
 
-// Convert a native fan speed to it's common equivalent.
+/// Convert a native fan speed into its stdAc equivilant.
+/// @param[in] speed The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::fanspeed_t IRMitsubishi136::toCommonFanSpeed(const uint8_t speed) {
   switch (speed) {
     case kMitsubishi136FanMax: return stdAc::fanspeed_t::kMax;
@@ -1068,7 +1106,9 @@ stdAc::fanspeed_t IRMitsubishi136::toCommonFanSpeed(const uint8_t speed) {
   }
 }
 
-// Convert a native vertical swing to it's common equivalent.
+/// Convert a native vertical swing postion to it's common equivalent.
+/// @param[in] pos A native position to convert.
+/// @return The common vertical swing position.
 stdAc::swingv_t IRMitsubishi136::toCommonSwingV(const uint8_t pos) {
   switch (pos) {
     case kMitsubishi136SwingVHighest: return stdAc::swingv_t::kHighest;
@@ -1079,7 +1119,8 @@ stdAc::swingv_t IRMitsubishi136::toCommonSwingV(const uint8_t pos) {
   }
 }
 
-// Convert the A/C state to it's common equivalent.
+/// Convert the current internal state into its stdAc::state_t equivilant.
+/// @return The stdAc equivilant of the native settings.
 stdAc::state_t IRMitsubishi136::toCommon(void) {
   stdAc::state_t result;
   result.protocol = decode_type_t::MITSUBISHI136;
@@ -1104,7 +1145,8 @@ stdAc::state_t IRMitsubishi136::toCommon(void) {
   return result;
 }
 
-// Convert the internal state into a human readable string.
+/// Convert the internal state into a human readable string.
+/// @return A string containing the settings in human-readable form.
 String IRMitsubishi136::toString(void) {
   String result = "";
   result.reserve(80);  // Reserve some heap for the string to reduce fragging.
@@ -1133,18 +1175,12 @@ String IRMitsubishi136::toString(void) {
 
 
 #if SEND_MITSUBISHI112
-// Send a Mitsubishi112 A/C message.
-//
-// Args:
-//   data: An array of bytes containing the IR command.
-//   nbytes: Nr. of bytes of data in the array. (>=kMitsubishi112StateLength)
-//   repeat: Nr. of times the message is to be repeated.
-//          (Default = kMitsubishi112MinRepeat).
-//
-// Status: Stable / Reported as working.
-//
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/947
+/// Send a Mitsubishi 112-bit A/C formatted message. (MITSUBISHI112)
+/// Status: Stable / Reported as working.
+/// @param[in] data The message to be sent.
+/// @param[in] nbytes The number of bytes of message to be sent.
+/// @param[in] repeat The number of times the command is to be repeated.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/947
 void IRsend::sendMitsubishi112(const unsigned char data[],
                                const uint16_t nbytes,
                                const uint16_t repeat) {
@@ -1160,35 +1196,31 @@ void IRsend::sendMitsubishi112(const unsigned char data[],
 #endif  // SEND_MITSUBISHI112
 
 #if DECODE_MITSUBISHI112 || DECODE_TCL112AC
-// Decode the supplied Mitsubishi112 / Tcl112Ac message.
-//
-// Args:
-//   results: Ptr to the data to decode and where to store the decode result.
-//   nbits:   Nr. of data bits to expect.
-//   strict:  Flag indicating if we should perform strict matching.
-// Returns:
-//   boolean: True if it can decode it, false if it can't.
-//
-// Status: STABLE / Reported as working.
-//
-// Note: Mitsubishi112 & Tcl112Ac are basically the same protocol.
-//       The only significant difference I can see is Mitsubishi112 has a
-//       slightly longer header mark. We will use that to determine which
-//       varient it should be. The other differences require full decoding and
-//       only only with certain settings.
-//       There are some other timing differences too, but the tolerances will
-//       overlap.
-// Ref:
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/619
-//   https://github.com/crankyoldgit/IRremoteESP8266/issues/947
-bool IRrecv::decodeMitsubishi112(decode_results *results, const uint16_t nbits,
-                                 const bool strict) {
-  if (results->rawlen < ((2 * nbits) + kHeader + kFooter - 1)) return false;
+/// Decode the supplied Mitsubishi/TCL 112-bit A/C message.
+///   (MITSUBISHI112, TCL112AC)
+/// Status: STABLE / Reported as working.
+/// @param[in,out] results Ptr to the data to decode & where to store the result
+/// @param[in] offset The starting index to use when attempting to decode the
+///   raw data. Typically/Defaults to kStartOffset.
+/// @param[in] nbits The number of data bits to expect.
+/// @param[in] strict Flag indicating if we should perform strict matching.
+/// @note Note Mitsubishi112 & Tcl112Ac are basically the same protocol.
+///   The only significant difference I can see is Mitsubishi112 has a
+///   slightly longer header mark. We will use that to determine which
+///   variant it should be. The other differences require full decoding and
+///   only only with certain settings.
+///   There are some other timing differences too, but the tolerances will
+///   overlap.
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/619
+/// @see https://github.com/crankyoldgit/IRremoteESP8266/issues/947
+bool IRrecv::decodeMitsubishi112(decode_results *results, uint16_t offset,
+                                 const uint16_t nbits, const bool strict) {
+  if (results->rawlen < (2 * nbits) + kHeader + kFooter - 1 + offset)
+    return false;
   if (nbits % 8 != 0) return false;  // Not a multiple of an 8 bit byte.
   if (strict) {  // Do checks to see if it matches the spec.
     if (nbits != kMitsubishi112Bits && nbits != kTcl112AcBits) return false;
   }
-  uint16_t offset = kStartOffset;
   decode_type_t typeguess = decode_type_t::UNKNOWN;
   uint16_t hdrspace;
   uint16_t bitmark;
@@ -1250,135 +1282,138 @@ bool IRrecv::decodeMitsubishi112(decode_results *results, const uint16_t nbits,
 #endif  // DECODE_MITSUBISHI112 || DECODE_TCL112AC
 
 // Code to emulate Mitsubishi 112bit A/C IR remote control unit.
-//
-// Equipment it seems compatible with:
-//   Brand: Mitsubishi Electric,  Model: MSH-A24WV / MUH-A24WV A/C
-//   Brand: Mitsubishi Electric,  Model: KPOA remote
 
-// Initialise the object.
+/// Class constructor
+/// @param[in] pin GPIO to be used when sending.
+/// @param[in] inverted Is the output signal to be inverted?
+/// @param[in] use_modulation Is frequency modulation to be used?
 IRMitsubishi112::IRMitsubishi112(const uint16_t pin, const bool inverted,
                                  const bool use_modulation)
     : _irsend(pin, inverted, use_modulation) { this->stateReset(); }
 
-// Reset the state of the remote to a known good state/sequence.
+/// Reset the state of the remote to a known good state/sequence.
 void IRMitsubishi112::stateReset(void) {
-  // The state of the IR remote in IR code form.
-  remote_state[0] = 0x23;
-  remote_state[1] = 0xCB;
-  remote_state[2] = 0x26;
-  remote_state[3] = 0x01;
-  remote_state[4] = 0x00;
-  remote_state[5] = 0x24;
-  remote_state[6] = 0x03;
-  remote_state[7] = 0x0B;
-  remote_state[8] = 0x10;
-  remote_state[9] = 0x00;
-  remote_state[10] = 0x00;
-  remote_state[11] = 0x00;
-  remote_state[12] = 0x30;
+  const uint8_t kReset[kMitsubishi112StateLength] = {
+      0x23, 0xCB, 0x26, 0x01, 0x00, 0x24, 0x03, 0x0B, 0x10,
+      0x00, 0x00, 0x00, 0x30};
+  setRaw(kReset);
 }
 
-// Calculate the checksum for the current internal state of the remote.
+/// Calculate the checksum for the current internal state of the remote.
 void IRMitsubishi112::checksum(void) {
   remote_state[kMitsubishi112StateLength - 1] = IRTcl112Ac::calcChecksum(
       remote_state, kMitsubishi112StateLength);
 }
 
-// Configure the pin for output.
+/// Set up hardware to be able to send a message.
 void IRMitsubishi112::begin(void) { _irsend.begin(); }
 
 #if SEND_MITSUBISHI112
-// Send the current desired state to the IR LED.
+/// Send the current internal state as an IR message.
+/// @param[in] repeat Nr. of times the message will be repeated.
 void IRMitsubishi112::send(const uint16_t repeat) {
-  checksum();  // Ensure correct checksum before sending.
-  _irsend.sendMitsubishi112(remote_state, kMitsubishi112StateLength, repeat);
+  _irsend.sendMitsubishi112(getRaw(), kMitsubishi112StateLength, repeat);
 }
 #endif  // SEND_MITSUBISHI112
 
-// Return a pointer to the internal state date of the remote.
+/// Get a PTR to the internal state/code for this protocol.
+/// @return PTR to a code for this protocol based on the current internal state.
 uint8_t *IRMitsubishi112::getRaw(void) {
   checksum();
   return remote_state;
 }
 
+/// Set the internal state from a valid code for this protocol.
+/// @param[in] data A valid code for this protocol.
 void IRMitsubishi112::setRaw(const uint8_t *data) {
-  for (uint8_t i = 0; i < (kMitsubishi112StateLength - 1); i++) {
-    remote_state[i] = data[i];
-  }
+  memcpy(remote_state, data, kMitsubishi112StateLength);
 }
 
-// Set the requested power state of the A/C to off.
+/// Set the requested power state of the A/C to off.
 void IRMitsubishi112::on(void) { setPower(true); }
 
-// Set the requested power state of the A/C to off.
+/// Set the requested power state of the A/C to off.
 void IRMitsubishi112::off(void) { setPower(false); }
 
-// Set the requested power state of the A/C.
+/// Change the power setting.
+/// @param[in] on true, the setting is on. false, the setting is off.
 void IRMitsubishi112::setPower(bool on) {
-  if (on)
-    remote_state[kMitsubishi112PowerByte] |= kMitsubishi112PowerBit;
-  else
-    remote_state[kMitsubishi112PowerByte] &= ~kMitsubishi112PowerBit;
+  setBit(&remote_state[kMitsubishi112PowerByte], kMitsubishi112PowerOffset, on);
 }
 
-// Return the requested power state of the A/C.
+/// Get the value of the current power setting.
+/// @return true, the setting is on. false, the setting is off.
 bool IRMitsubishi112::getPower(void) {
-  return remote_state[kMitsubishi112PowerByte] & kMitsubishi112PowerBit;
+  return GETBIT8(remote_state[kMitsubishi112PowerByte],
+                 kMitsubishi112PowerOffset);
 }
 
-// Set the temp. in deg C
+/// Set the temperature.
+/// @param[in] degrees The temperature in degrees celsius.
 void IRMitsubishi112::setTemp(const uint8_t degrees) {
   uint8_t temp = std::max((uint8_t)kMitsubishi112MinTemp, degrees);
   temp = std::min((uint8_t)kMitsubishi112MaxTemp, temp);
-  remote_state[kMitsubishi112TempByte] = kMitsubishiAcMaxTemp - temp;
+  setBits(&remote_state[kMitsubishi112TempByte], kLowNibble,
+          kMitsubishi112TempSize, kMitsubishiAcMaxTemp - temp);
 }
 
-// Return the set temp. in deg C
+/// Get the current temperature setting.
+/// @return The current setting for temp. in degrees celsius.
 uint8_t IRMitsubishi112::getTemp(void) {
-  return (kMitsubishiAcMaxTemp -remote_state[kMitsubishi112TempByte]);
+  return kMitsubishiAcMaxTemp - GETBITS8(remote_state[kMitsubishi112TempByte],
+                                         kLowNibble, kMitsubishi112TempSize);
 }
 
+/// Set the speed of the fan.
+/// @param[in] speed The desired setting.
 void IRMitsubishi112::setFan(const uint8_t speed) {
   switch (speed) {
     case kMitsubishi112FanMin:
     case kMitsubishi112FanLow:
     case kMitsubishi112FanMed:
     case kMitsubishi112FanMax:
-      remote_state[kMitsubishi112FanByte] &= kMitsubishi112FanMask;
-      remote_state[kMitsubishi112FanByte] |= speed;
+      setBits(&remote_state[kMitsubishi112FanByte], kMitsubishi112FanOffset,
+              kMitsubishi112FanSize, speed);
       break;
     default:
       setFan(kMitsubishi112FanMax);
   }
 }
 
-// Return the requested state of the unit's fan.
+/// Get the current fan speed setting.
+/// @return The current fan speed/mode.
 uint8_t IRMitsubishi112::getFan(void) {
-  return (remote_state[kMitsubishi112FanByte] & kMitsubishi112FanGetMask);
+  return GETBITS8(remote_state[kMitsubishi112FanByte], kMitsubishi112FanOffset,
+                  kMitsubishi112FanSize);
 }
 
-// Return the requested climate operation mode of the a/c unit.
+/// Get the operating mode setting of the A/C.
+/// @return The current operating mode setting.
 uint8_t IRMitsubishi112::getMode(void) {
-  return remote_state[kMitsubishi112ModeByte] & kMitsubishi112ModeMask;
+  return GETBITS8(remote_state[kMitsubishi112ModeByte],
+                  kMitsubishi112ModeOffset, kModeBitsSize);
 }
 
-// Set the requested climate operation mode of the a/c unit.
+/// Set the operating mode of the A/C.
+/// @param[in] mode The desired operating mode.
 void IRMitsubishi112::setMode(const uint8_t mode) {
   // If we get an unexpected mode, default to AUTO.
   switch (mode) {
+    // Note: No Fan Only mode.
     case kMitsubishi112Cool:
     case kMitsubishi112Heat:
     case kMitsubishi112Auto:
     case kMitsubishi112Dry:
-      remote_state[kMitsubishi112ModeByte] &= ~kMitsubishi112ModeMask;
-      remote_state[kMitsubishi112ModeByte] |= mode;
+      setBits(&remote_state[kMitsubishi112ModeByte], kMitsubishi112ModeOffset,
+              kModeBitsSize, mode);
       break;
     default:
       setMode(kMitsubishi112Auto);
   }
 }
 
-// Set the requested vane operation mode of the a/c unit.
+/// Set the Vertical Swing mode of the A/C.
+/// @param[in] position The position/mode to set the swing to.
 void IRMitsubishi112::setSwingV(const uint8_t position) {
   // If we get an unexpected mode, default to auto.
   switch (position) {
@@ -1388,20 +1423,23 @@ void IRMitsubishi112::setSwingV(const uint8_t position) {
     case kMitsubishi112SwingVHigh:
     case kMitsubishi112SwingVHighest:
     case kMitsubishi112SwingVAuto:
-      remote_state[kMitsubishi112SwingVByte] &= ~kMitsubishi112SwingVMask;
-      remote_state[kMitsubishi112SwingVByte] |= position;
+      setBits(&remote_state[kMitsubishi112SwingVByte],
+              kMitsubishi112SwingVOffset, kMitsubishi112SwingVSize, position);
       break;
     default:
       setMode(kMitsubishi112SwingVAuto);
   }
 }
 
-// Return the requested vane operation mode of the a/c unit.
+/// Get the Vertical Swing mode of the A/C.
+/// @return The native position/mode setting.
 uint8_t IRMitsubishi112::getSwingV(void) {
-  return remote_state[kMitsubishi112SwingVByte] & kMitsubishi112SwingVMask;
+  return GETBITS8(remote_state[kMitsubishi112SwingVByte],
+                  kMitsubishi112SwingVOffset, kMitsubishi112SwingVSize);
 }
 
-// Set the requested vane operation mode of the a/c unit.
+/// Set the Horizontal Swing mode of the A/C.
+/// @param[in] position The position/mode to set the swing to.
 void IRMitsubishi112::setSwingH(const uint8_t position) {
   // If we get an unexpected mode, default to auto.
   switch (position) {
@@ -1412,45 +1450,55 @@ void IRMitsubishi112::setSwingH(const uint8_t position) {
     case kMitsubishi112SwingHRightMax:
     case kMitsubishi112SwingHWide:
     case kMitsubishi112SwingHAuto:
-      remote_state[kMitsubishi112SwingHByte] &= ~kMitsubishi112SwingHMask;
-      remote_state[kMitsubishi112SwingHByte] |= position;
+      setBits(&remote_state[kMitsubishi112SwingHByte],
+              kMitsubishi112SwingHOffset, kMitsubishi112SwingHSize, position);
       break;
     default:
-      remote_state[kMitsubishi112SwingHByte] &= ~kMitsubishi112SwingHMask;
-      remote_state[kMitsubishi112SwingHByte] |= kMitsubishi112SwingHAuto;
-      break;
+      setSwingH(kMitsubishi112SwingHAuto);
   }
 }
 
-// Return the requested vane operation mode of the a/c unit.
+
+/// Get the Horizontal Swing mode of the A/C.
+/// @return The native position/mode setting.
 uint8_t IRMitsubishi112::getSwingH(void) {
-  return (remote_state[kMitsubishi112SwingHByte] & kMitsubishi112SwingHMask);
+  return GETBITS8(remote_state[kMitsubishi112SwingHByte],
+                  kMitsubishi112SwingHOffset, kMitsubishi112SwingHSize);
 }
 
-// Emulate a quiet setting. There is no true quiet setting on this a/c
+/// Set the Quiet mode of the A/C.
+/// @param[in] on true, the setting is on. false, the setting is off.
+/// @note There is no true quiet setting on this A/C.
 void IRMitsubishi112::setQuiet(bool on) {
   if (on)
     setFan(kMitsubishi112FanQuiet);
   else if (getQuiet()) setFan(kMitsubishi112FanLow);
 }
 
-// Return the requested power state of the A/C.
+
+/// Get the Quiet mode of the A/C.
+/// @return true, the setting is on. false, the setting is off.
+/// @note There is no true quiet setting on this A/C.
 bool IRMitsubishi112::getQuiet(void) {
   return getFan() == kMitsubishi112FanQuiet;
 }
 
-
-// Convert a standard A/C mode into its native mode.
+/// Convert a stdAc::opmode_t enum into its native mode.
+/// @param[in] mode The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi112::convertMode(const stdAc::opmode_t mode) {
   switch (mode) {
     case stdAc::opmode_t::kCool: return kMitsubishi112Cool;
     case stdAc::opmode_t::kHeat: return kMitsubishi112Heat;
     case stdAc::opmode_t::kDry: return kMitsubishi112Dry;
+    // Note: No Fan Only mode.
     default: return kMitsubishi112Auto;
   }
 }
 
-// Convert a standard A/C Fan speed into its native fan speed.
+/// Convert a stdAc::fanspeed_t enum into it's native speed.
+/// @param[in] speed The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi112::convertFan(const stdAc::fanspeed_t speed) {
   switch (speed) {
     case stdAc::fanspeed_t::kMin: return kMitsubishi112FanMin;
@@ -1462,7 +1510,9 @@ uint8_t IRMitsubishi112::convertFan(const stdAc::fanspeed_t speed) {
   }
 }
 
-// Convert a standard A/C vertical swing into its native setting.
+/// Convert a stdAc::swingv_t enum into it's native setting.
+/// @param[in] position The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi112::convertSwingV(const stdAc::swingv_t position) {
   switch (position) {
     case stdAc::swingv_t::kHighest: return kMitsubishi112SwingVHighest;
@@ -1474,7 +1524,9 @@ uint8_t IRMitsubishi112::convertSwingV(const stdAc::swingv_t position) {
   }
 }
 
-// Convert a standard A/C vertical swing into its native setting.
+/// Convert a stdAc::swingh_t enum into it's native setting.
+/// @param[in] position The enum to be converted.
+/// @return The native equivilant of the enum.
 uint8_t IRMitsubishi112::convertSwingH(const stdAc::swingh_t position) {
   switch (position) {
     case stdAc::swingh_t::kLeftMax: return kMitsubishi112SwingHLeftMax;
@@ -1488,7 +1540,9 @@ uint8_t IRMitsubishi112::convertSwingH(const stdAc::swingh_t position) {
   }
 }
 
-// Convert a native mode to it's common equivalent.
+/// Convert a native mode into its stdAc equivilant.
+/// @param[in] mode The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::opmode_t IRMitsubishi112::toCommonMode(const uint8_t mode) {
   switch (mode) {
     case kMitsubishi112Cool: return stdAc::opmode_t::kCool;
@@ -1498,7 +1552,9 @@ stdAc::opmode_t IRMitsubishi112::toCommonMode(const uint8_t mode) {
   }
 }
 
-// Convert a native fan speed to it's common equivalent.
+/// Convert a native fan speed into its stdAc equivilant.
+/// @param[in] speed The native setting to be converted.
+/// @return The stdAc equivilant of the native setting.
 stdAc::fanspeed_t IRMitsubishi112::toCommonFanSpeed(const uint8_t speed) {
   switch (speed) {
     case kMitsubishi112FanMax: return stdAc::fanspeed_t::kMax;
@@ -1509,34 +1565,37 @@ stdAc::fanspeed_t IRMitsubishi112::toCommonFanSpeed(const uint8_t speed) {
   }
 }
 
-// Convert a native vertical swing to it's common equivalent.
+/// Convert a native vertical swing postion to it's common equivalent.
+/// @param[in] pos A native position to convert.
+/// @return The common vertical swing position.
 stdAc::swingv_t IRMitsubishi112::toCommonSwingV(const uint8_t pos) {
   switch (pos) {
     case kMitsubishi112SwingVHighest: return stdAc::swingv_t::kHighest;
-    case kMitsubishi112SwingVHigh: return stdAc::swingv_t::kHigh;
-    case kMitsubishi112SwingVMiddle: return stdAc::swingv_t::kMiddle;
-    case kMitsubishi112SwingVLow: return stdAc::swingv_t::kLow;
-    case kMitsubishi112SwingVLowest: return stdAc::swingv_t::kLowest;
-    default: return stdAc::swingv_t::kAuto;
+    case kMitsubishi112SwingVHigh:    return stdAc::swingv_t::kHigh;
+    case kMitsubishi112SwingVMiddle:  return stdAc::swingv_t::kMiddle;
+    case kMitsubishi112SwingVLow:     return stdAc::swingv_t::kLow;
+    case kMitsubishi112SwingVLowest:  return stdAc::swingv_t::kLowest;
+    default:                          return stdAc::swingv_t::kAuto;
   }
 }
 
-// Convert a native vertical swing to it's common equivalent.
+/// Convert a native horizontal swing postion to it's common equivalent.
+/// @param[in] pos A native position to convert.
+/// @return The common horizontal swing position.
 stdAc::swingh_t IRMitsubishi112::toCommonSwingH(const uint8_t pos) {
   switch (pos) {
-    case kMitsubishi112SwingHLeftMax: return stdAc::swingh_t::kLeftMax;
-    case kMitsubishi112SwingHLeft: return stdAc::swingh_t::kLeft;
-    case kMitsubishi112SwingHMiddle: return stdAc::swingh_t::kMiddle;
-    case kMitsubishi112SwingHRight: return stdAc::swingh_t::kRight;
+    case kMitsubishi112SwingHLeftMax:  return stdAc::swingh_t::kLeftMax;
+    case kMitsubishi112SwingHLeft:     return stdAc::swingh_t::kLeft;
+    case kMitsubishi112SwingHMiddle:   return stdAc::swingh_t::kMiddle;
+    case kMitsubishi112SwingHRight:    return stdAc::swingh_t::kRight;
     case kMitsubishi112SwingHRightMax: return stdAc::swingh_t::kRightMax;
-    case kMitsubishi112SwingHWide: return stdAc::swingh_t::kWide;
-    case kMitsubishi112SwingHAuto: return stdAc::swingh_t::kAuto;
-    default: return stdAc::swingh_t::kAuto;
+    case kMitsubishi112SwingHWide:     return stdAc::swingh_t::kWide;
+    default:                           return stdAc::swingh_t::kAuto;
   }
 }
 
-
-// Convert the A/C state to it's common equivalent.
+/// Convert the current internal state into its stdAc::state_t equivilant.
+/// @return The stdAc equivilant of the native settings.
 stdAc::state_t IRMitsubishi112::toCommon(void) {
   stdAc::state_t result;
   result.protocol = decode_type_t::MITSUBISHI112;
@@ -1547,8 +1606,8 @@ stdAc::state_t IRMitsubishi112::toCommon(void) {
   result.degrees = this->getTemp();
   result.fanspeed = this->toCommonFanSpeed(this->getFan());
   result.swingv = this->toCommonSwingV(this->getSwingV());
-  result.quiet = this->getQuiet();
   result.swingh = this->toCommonSwingH(this->getSwingH());;
+  result.quiet = this->getQuiet();
   // Not supported.
   result.econo = false;  // Need to figure this part from stdAc
   result.clock = -1;
@@ -1563,38 +1622,44 @@ stdAc::state_t IRMitsubishi112::toCommon(void) {
   return result;
 }
 
-// Convert the internal state into a human readable string.
+/// Convert the internal state into a human readable string.
+/// @return A string containing the settings in human-readable form.
 String IRMitsubishi112::toString(void) {
   String result = "";
   result.reserve(80);  // Reserve some heap for the string to reduce fragging.
-  result += addBoolToString(getPower(), F("Power"), false);
+  result += addBoolToString(getPower(), kPowerStr, false);
   result += addModeToString(getMode(), kMitsubishi112Auto, kMitsubishi112Cool,
-                            kMitsubishi112Heat, kMitsubishi112Dry, -1);
+                            kMitsubishi112Heat, kMitsubishi112Dry,
+                            kMitsubishi112Auto);
   result += addTempToString(getTemp());
   result += addFanToString(getFan(), kMitsubishi112FanMax,
                            kMitsubishi112FanLow,  kMitsubishi112FanMax,
                            kMitsubishi112FanQuiet, kMitsubishi112FanMed);
-  result += addIntToString(getSwingV(), F("Swing(V)"));
+  result += addIntToString(getSwingV(), kSwingVStr);
+  result += kSpaceLBraceStr;
   switch (getSwingV()) {
-    case kMitsubishi112SwingVHighest: result += F(" (Highest)"); break;
-    case kMitsubishi112SwingVHigh: result += F(" (High)"); break;
-    case kMitsubishi112SwingVMiddle: result += F(" (Middle)"); break;
-    case kMitsubishi112SwingVLow: result += F(" (Low)"); break;
-    case kMitsubishi112SwingVLowest: result += F(" (Lowest)"); break;
-    case kMitsubishi112SwingVAuto: result += F(" (Auto)"); break;
-    default: result += F(" (UNKNOWN)");
+    case kMitsubishi112SwingVHighest: result += kHighestStr; break;
+    case kMitsubishi112SwingVHigh:    result += kHighStr; break;
+    case kMitsubishi112SwingVMiddle:  result += kMiddleStr; break;
+    case kMitsubishi112SwingVLow:     result += kLowStr; break;
+    case kMitsubishi112SwingVLowest:  result += kLowestStr; break;
+    case kMitsubishi112SwingVAuto:    result += kAutoStr; break;
+    default:                          result += kUnknownStr;
   }
-  result += addIntToString(getSwingH(), F("Swing(H)"));
+  result += ')';
+  result += addIntToString(getSwingH(), kSwingHStr);
+  result += kSpaceLBraceStr;
   switch (getSwingH()) {
-    case kMitsubishi112SwingHLeftMax: result += F(" (Left Max)"); break;
-    case kMitsubishi112SwingHLeft: result += F(" (Left)"); break;
-    case kMitsubishi112SwingHMiddle: result += F(" (Middle)"); break;
-    case kMitsubishi112SwingHRight: result += F(" (Right)"); break;
-    case kMitsubishi112SwingHRightMax: result += F(" (Right Max)"); break;
-    case kMitsubishi112SwingHWide: result += F(" (Wide)"); break;
-    case kMitsubishi112SwingHAuto: result += F(" (Auto)"); break;
-    default: result += F(" (UNKNOWN)");
+    case kMitsubishi112SwingHLeftMax:  result += kLeftMaxStr; break;
+    case kMitsubishi112SwingHLeft:     result += kLeftStr; break;
+    case kMitsubishi112SwingHMiddle:   result += kMiddleStr; break;
+    case kMitsubishi112SwingHRight:    result += kRightStr; break;
+    case kMitsubishi112SwingHRightMax: result += kRightMaxStr; break;
+    case kMitsubishi112SwingHWide:     result += kWideStr; break;
+    case kMitsubishi112SwingHAuto:     result += kAutoStr; break;
+    default:                           result += kUnknownStr;
   }
-  result += addBoolToString(getQuiet(), F("Quiet"));
+  result += ')';
+  result += addBoolToString(getQuiet(), kQuietStr);
   return result;
 }
