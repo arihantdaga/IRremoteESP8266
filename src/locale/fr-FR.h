@@ -10,13 +10,16 @@
 #define D_STR_SLEEP "Pause"
 #define D_STR_LIGHT "Lumière"
 #define D_STR_POWERFUL "Puissance"
+#define D_STR_PREVIOUS "Precedente"
+#define D_STR_PREVIOUSPOWER D_STR_POWER " " D_STR_PREVIOUS
 #define D_STR_QUIET "Silence"
 #define D_STR_ECONO "Economie"
 #define D_STR_BEEP "Bip"
-#define D_STR_MOLD "Moule"
+#define D_STR_MOULD "Moule"
 #define D_STR_CLEAN "Nettoyer"
 #define D_STR_PURIFY "Purifier"
-#define D_STR_TIMER "Timer"
+#define D_STR_ON "On"
+#define D_STR_OFF "Off"
 #define D_STR_ONTIMER D_STR_ON " " D_STR_TIMER
 #define D_STR_OFFTIMER D_STR_OFF " " D_STR_TIMER
 #define D_STR_CLOCK "Heure"
@@ -66,7 +69,6 @@
 #define D_STR_FANONLY "Seul_fan"
 #define D_STR_DRY "Sec"
 
-#define D_STR_MED "Avec"
 #define D_STR_MEDIUM "Moyen"
 
 #define D_STR_HIGHEST "Le plus haut"
@@ -78,23 +80,19 @@
 #define D_STR_LO "B"
 #define D_STR_LOWEST "Le plus bas"
 #define D_STR_RIGHT "Droite"
+#define D_STR_MAX "Max"
 #define D_STR_MAXRIGHT D_STR_MAX " " D_STR_RIGHT
 #define D_STR_RIGHTMAX_NOSPACE D_STR_RIGHT D_STR_MAX
 #define D_STR_LEFT "Gauche"
 #define D_STR_MAXLEFT D_STR_MAX " " D_STR_LEFT
 #define D_STR_LEFTMAX_NOSPACE D_STR_LEFT D_STR_MAX
 #define D_STR_WIDE "Large"
-#define D_STR_CENTRE "Centre"
- #define D_STR_TOP "au-dessus"
-#define D_STR_BOTTOM "en-dessous"
+#define D_STR_TOP "Au-dessus"
+#define D_STR_BOTTOM "En-dessous"
 
 #define D_STR_DAY "Jour"
-#define D_STR_DAYS D_STR_DAY "J"
 #define D_STR_HOUR "Heure"
-#define D_STR_HOURS D_STR_HOUR "h"
-#define D_STR_MINUTES D_STR_MINUTE "m"
 #define D_STR_SECOND "Seconde"
-#define D_STR_SECONDS D_STR_SECOND "s"
 #define D_STR_NOW "Maintenant"
 #define D_STR_THREELETTERDAYS "LunMarMerJeuVenSamDim"
 
@@ -105,12 +103,12 @@
 
 #define D_STR_REPEAT "Répetition"
 
-// IRrecvDumpV2
+// IRrecvDumpV2+
 #define D_STR_TIMESTAMP "Horodatage"
 #define D_STR_LIBRARY "Bibliothèque"
 #define D_STR_MESGDESC "Rèférence"
 #define D_STR_IRRECVDUMP_STARTUP \
-    "IRrecvDumpV2 fonctionne et attend l’entrée IR sur la broche %d"
+    "IRrecvDump fonctionne et attend l’entrée IR sur la broche %d"
 #define D_WARN_BUFFERFULL \
     "ATTENTION: IR Code est trop gros pour le buffer (>= %d). " \
     "Le résultat ne doit pas être approuvé avant que cela soit résolu. " \

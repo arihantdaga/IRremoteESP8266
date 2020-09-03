@@ -17,7 +17,7 @@
  *   Version 0.4 July, 2018
  *     - Minor improvements and more A/C unit support.
  *   Version 0.3 November, 2017
- *     - Support for A/C decoding for some protcols.
+ *     - Support for A/C decoding for some protocols.
  *   Version 0.2 April, 2017
  *     - Decode from a copy of the data so we can start capturing faster thus
  *       reduce the likelihood of miscaptures.
@@ -25,6 +25,7 @@
  */
 
 #include <Arduino.h>
+#include <assert.h>
 #include <IRrecv.h>
 #include <IRremoteESP8266.h>
 #include <IRac.h>
@@ -34,6 +35,7 @@
 // ==================== start of TUNEABLE PARAMETERS ====================
 // An IR detector/demodulator is connected to GPIO pin 14
 // e.g. D5 on a NodeMCU board.
+// Note: GPIO 16 won't work on the ESP8266 as it does not have interrupts.
 const uint16_t kRecvPin = 14;
 
 // The Serial connection baud rate.
@@ -116,6 +118,10 @@ void setup() {
 #endif  // ESP8266
   while (!Serial)  // Wait for the serial connection to be establised.
     delay(50);
+  // Perform a low level sanity checks that the compiler performs bit field
+  // packing as we expect and Endianness is as we expect.
+  assert(irutils::lowLevelSanityCheck() == 0);
+
   Serial.printf("\n" D_STR_IRRECVDUMP_STARTUP "\n", kRecvPin);
 #if DECODE_HASH
   // Ignore messages with less than minimum on or off pulses.
